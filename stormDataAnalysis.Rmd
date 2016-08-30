@@ -1,0 +1,261 @@
+---
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+
+
+# NOAA Storm Events Data Analysis
+
+## Reproducible Research: Peer Assessment 2
+
+An Analysis Report of Health and Economic Impact by Severe Weather Events - Based on NOAA Storm Database
+
+## Synopsis
+
+Storm and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can results in fatalities, injuries and property damage. Preventing such outcomes to the extent possible is a key concern. 
+
+The U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database tracks characteristics of major storms and weather events in the United States, include when and where they occur, as well as estimates of any fatalities, injuries and property damage. 
+
+This report contains the exploratory analysis results on the health and economic impact by the severe weather events based on the data from NOAA database.
+
+## Data Processing
+
+### Loading the data
+```{r}
+setwd("C:/Users/kannanthegreat/Documents/coursera")
+```
+
+```{r}
+# download file from URL
+if (!file.exists("c:/Users/kannanthegreat/Documents/coursera/storm.csv.bz2")) {
+    download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", 
+        "c:/Users/kannanthegreat/Documents/coursera/storm.csv.bz2")
+}
+
+```
+```{r}
+# unzip file
+if (!file.exists("c:/Users/kannanthegreat/Documents/coursera/storm.csv")) {
+    library("utils")
+    unzip("c:/Users/kannanthegreat/Documents/coursera/storm.csv.bz2", overwrite = TRUE, junkpaths = FALSE, exdir = ".", unzip = "internal",
+      setTimes = FALSE,"c:/Users/kannanthegreat/Documents/coursera")
+}
+```
+
+```{r}
+# load data into R
+
+storm <- read.csv("c:/Users/kannanthegreat/Documents/coursera/storm.csv")
+head(storm)
+
+```
+Let us find number of rows and Columns
+```{r}
+dim(storm)
+```
+There are 902297 rows and 37 columns.The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of reliable/complete records.
+
+### Column Names 
+
+```{r}
+names(storm)
+```
+### Histogram of Weather data over years
+```{r}
+if (dim(storm)[2] == 37) {
+    storm$year <- as.numeric(format(as.Date(storm$BGN_DATE, format = "%m/%d/%Y %H:%M:%S"), "%Y"))
+}
+hist(storm$year, breaks = 30)
+```
+
+#### Creating subset of Data
+
+Based on the histogram above, we see that the number of events tracked begins to increase around 1995. So, the subset of the data from 1990 to 2011 will be used to get most out of most complete records.
+
+```{r}
+stormData <- storm[storm$year >= 1995, ]
+dim(stormData)
+```
+Now, there are 681500 rows and 38 columns in total.
+
+### Pre process the data for relevant details
+As the data set is huge, we will keep only the columns meaningful for our analysis. These are:
+
+BGN_DATE - Date,
+EVTYPE - Event type,
+FATALITIES - No. of fatalities,
+INJURIES - No. of injuries,
+PROPDMG - Property damage,
+PROPDMGEXP - Unit of property damage amount,
+CROPDMG - Crop damage,
+CROPDMGEXP -Unit of crop damage amount.
+
+```{r}
+keepCols <- c("BGN_DATE","EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")
+subStorm <- storm[keepCols]
+
+
+```
+#### Format the input data as appropriate
+ 
+ loading libraries
+
+```{r}
+library(R.utils)
+library(ggplot2)
+library(plyr)
+library(gridExtra)
+library(date)
+library(qcc)
+
+```
+### Data Analysis
+
+### Preparing the property and crop damage data
+
+#### Normalizing the property and crop damage to million USD.
+
+```{r}
+unique(subStorm$Property_Damage_Unit)
+
+```
+
+```{r}
+unique(subStorm$Crop_Damage_Unit)
+
+```
+# Sorting the property exponent data
+
+```{r}
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "K"] <- 1000
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "M"] <- 1e+06
+subStorm$PROPEXP[subStorm$PROPDMGEXP == ""] <- 1
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "B"] <- 1e+09
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "m"] <- 1e+06
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "0"] <- 1
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "5"] <- 1e+05
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "6"] <- 1e+06
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "4"] <- 10000
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "2"] <- 100
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "3"] <- 1000
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "h"] <- 100
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "7"] <- 1e+07
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "H"] <- 100
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "1"] <- 10
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "8"] <- 1e+08
+
+# give 0 to invalid exponent data, so they not count in
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "+"] <- 0
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "-"] <- 0
+subStorm$PROPEXP[subStorm$PROPDMGEXP == "?"] <- 0
+
+# compute the property damage value
+subStorm$PROPDMGVAL <- subStorm$PROPDMG * subStorm$PROPEXP
+
+```
+### Sorting the Crop Component data
+
+```{r}
+# Sorting the crop exponent data
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "M"] <- 1e+06
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "K"] <- 1000
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "m"] <- 1e+06
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "B"] <- 1e+09
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "0"] <- 1
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "k"] <- 1000
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "2"] <- 100
+subStorm$CROPEXP[subStorm$CROPDMGEXP == ""] <- 1
+
+# give 0 to invalid exponent data, so they not count in
+
+subStorm$CROPEXP[subStorm$CROPDMGEXP == "?"] <- 0
+
+# compute the crop damage value
+
+subStorm$CROPDMGVAL <- subStorm$CROPDMG * subStorm$CROPEXP
+
+```
+### Aggregate the data by event
+
+
+```{r}
+
+# aggregate the data by event
+
+fatal <- aggregate(FATALITIES ~ EVTYPE, data = subStorm, FUN = sum)
+injury <- aggregate(INJURIES ~ EVTYPE, data = subStorm, FUN = sum)
+propdmg <- aggregate(PROPDMGVAL ~ EVTYPE, data = subStorm, FUN = sum)
+cropdmg <- aggregate(CROPDMGVAL ~ EVTYPE, data = subStorm, FUN = sum)
+
+```
+
+
+```{r}
+
+# Top 10 event for fatalities
+
+fatal10 <- fatal[order(-fatal$FATALITIES), ][1:10, ]
+
+# Top 10 event for injuries
+
+injury10 <- injury[order(-injury$INJURIES), ][1:10, ]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+pareto.chart (fatal10$FATALITIES, las = 3, names.arg = fatal10$EVTYPE, main = "Top 10 Fatalities events", ylab = "number of fatalities", col = "red")
+
+ pareto.chart(injury10$INJURIES, las = 3, names.arg = injury10$EVTYPE, main = "Top 10 Highest Injuries events", ylab = "number of injuries", col = "red")
+ 
+```
+
+
+```{r}
+
+# Top 10 events with highest property damage
+
+propdmg10 <- propdmg[order(-propdmg$PROPDMGVAL), ][1:10, ]
+
+# Top 10 events with highest crop damage
+
+cropdmg10 <- cropdmg[order(-cropdmg$CROPDMGVAL), ][1:10, ]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.8)
+pareto.chart(propdmg10$PROPDMGVAL/(10^9), las = 3, names.arg = propdmg10$EVTYPE, 
+    main = "Top 10 Property Damages events", ylab = "Cost of damages ($billions)", col = "red")
+
+pareto.chart(cropdmg10$CROPDMGVAL/(10^9), las = 3, names.arg = cropdmg10$EVTYPE, 
+    main = "Top 10 Crop Damages events", ylab = "Cost of damages ($ billions)", 
+    col = "red")
+
+```
+
+
+## RESULTS 
+
+### Findings
+
+#### Answers to the assignment questions
+
+1. The top ten weather events contributing to fatalities can be ordered as
+Tornado, Excessive Heat, Flash Flood, Heat, Lightning, TSTM Wind, Flood, Rip Count, High Wind and Avalanche.
+
+Tornado is the major contributor with 46.7% folowwed by excessive heat(15.8%), with minor contributions from Flash Flood and Heat. These four events together account for approximately 80% of the events.
+
+2. The top ten weather events contributing to injuries can be ordered as Tornado, TSTM Wind, Flood, Excessive Heat, Lightning, Heat, Ice Storm, Thunder storm, Wind, Hail.
+
+Tornado, again accounts for a lion's share of approximately 73%, TSTM is distant second (approximately 6%); the two together accounting for 80% of the events causing injuries.
+
+3. The top ten weather events contributing to propery damages can be ordered as
+Flood, Typhoon, Tornado, Storm surge, Flash flood, Heat, Hurricane, Tropic torm, and High wind.
+
+Flood is the major contributor with 38 % followed by the Typhoon, Tornado and Storm surge with almost even contribution, These four events together account for around 80% of total events.
+
+4. The top ten weather events contributing to crop damages can be ordered as Drought, Flood, River Flood, Ice Storm, Hail, Hurricate, Hurricane/Typhoon, Flash Flood, Extreme Cold, and Forst.
+
+Drought is the major contributor followed by Flood, River Flood,Hail and Hurrican contributing almost evenly and together with Drought add up to about 80% of the events. 
+
+## Conclusions and Recommendations
+
+Action may be initiated to mitigate the effects of Tornado, Excessive Heat, Flood and Drought. 
+
+
+
